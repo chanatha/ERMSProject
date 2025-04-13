@@ -1,37 +1,40 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using ERMS.Models;
 using ERMS.Services;
+using ERMS.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace ERMS.Controllers
 {
+    [Authorize(Roles = "Admin,Manager")]
     public class EmployeesController : Controller
     {
-        private readonly EmployeeApiService _service;
+        private readonly ApplicationDbContext _context;
 
-        public EmployeesController(EmployeeApiService service)
+        public EmployeesController(ApplicationDbContext context)
         {
-            _service = service;
-        }
-
-        private string GetToken()
-        {
-            // In production, retrieve from session or secure store
-            return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW4iLCJleHAiOjE3NDM4NzE5Mjd9.DHS5Fs5dCk4jTy8f_exO0Q0vnUjQSI7tiod3_ZOVT0g"; // Replace with actual token
+            _context = context;
         }
 
         public async Task<IActionResult> Index()
         {
-            var token = GetToken();
-            var employees = await _service.GetAllAsync(token);
+            var employees = await _context.Employees
+                .FromSqlRaw("EXEC GetAllEmployees")
+                .ToListAsync();
             return View(employees);
         }
 
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null) return NotFound();
-            var token = GetToken();
-            var emp = await _service.GetByIdAsync(id.Value, token);
-            return View(emp);
+
+            var employee = await _context.Employees
+                .FromSqlRaw("EXEC GetEmployeeById @p0", id)
+                .FirstOrDefaultAsync();
+
+            if (employee == null) return NotFound();
+            return View(employee);
         }
 
         public IActionResult Create() => View();
@@ -42,7 +45,9 @@ namespace ERMS.Controllers
         {
             if (ModelState.IsValid)
             {
-                await _service.CreateAsync(employee, GetToken());
+                await _context.Database.ExecuteSqlRawAsync("EXEC CreateEmployee @p0, @p1, @p2, @p3",
+                    employee.FirstName, employee.LastName, employee.Position, employee.HireDate);
+
                 return RedirectToAction(nameof(Index));
             }
             return View(employee);
@@ -51,9 +56,13 @@ namespace ERMS.Controllers
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null) return NotFound();
-            var token = GetToken();
-            var emp = await _service.GetByIdAsync(id.Value, token);
-            return View(emp);
+
+            var employee = await _context.Employees
+                .FromSqlRaw("EXEC GetEmployeeById @p0", id)
+                .FirstOrDefaultAsync();
+
+            if (employee == null) return NotFound();
+            return View(employee);
         }
 
         [HttpPost]
@@ -64,7 +73,9 @@ namespace ERMS.Controllers
 
             if (ModelState.IsValid)
             {
-                await _service.UpdateAsync(employee, GetToken());
+                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateEmployee @p0, @p1, @p2, @p3, @p4",
+                    employee.Id, employee.FirstName, employee.LastName, employee.Position, employee.HireDate);
+
                 return RedirectToAction(nameof(Index));
             }
             return View(employee);
@@ -73,15 +84,19 @@ namespace ERMS.Controllers
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null) return NotFound();
-            var emp = await _service.GetByIdAsync(id.Value, GetToken());
-            return View(emp);
+
+            var employee = await _context.Employees
+                .FromSqlRaw("EXEC GetEmployeeById @p0", id)
+                .FirstOrDefaultAsync();
+
+            return View(employee);
         }
 
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            await _service.DeleteAsync(id, GetToken());
+            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteEmployee @p0", id);
             return RedirectToAction(nameof(Index));
         }
     }

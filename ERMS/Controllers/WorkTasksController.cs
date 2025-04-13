@@ -1,86 +1,57 @@
-﻿using ERMS.Models;
+﻿using ERMS.Data;
+using ERMS.Models;
 using ERMS.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace ERMS.Controllers
 {
+    [Authorize(Roles = "Admin,Manager")]
     public class WorkTasksController : Controller
     {
-        private readonly WorkTaskApiService _taskApiService;
-        private readonly ProjectApiService _projectApiService;
-        private readonly EmployeeApiService _employeeApiService;
+        private readonly ApplicationDbContext _context;
 
-        public WorkTasksController(WorkTaskApiService taskApiService,
-                                   ProjectApiService projectApiService,
-                                   EmployeeApiService employeeApiService)
+        public WorkTasksController(ApplicationDbContext context)
         {
-            _taskApiService = taskApiService;
-            _projectApiService = projectApiService;
-            _employeeApiService = employeeApiService;
+            _context = context;
         }
 
-        private string GetToken()
+        private async Task PopulateDropdownsAsync()
         {
-            // In production, retrieve from session or secure store
-            return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW4iLCJleHAiOjE3NDM4NzE5Mjd9.DHS5Fs5dCk4jTy8f_exO0Q0vnUjQSI7tiod3_ZOVT0g"; // Replace with actual token
-        }
-
-        private async Task PopulateDropdowns()
-        {
-            var token = GetToken();
-
-            var projects = await _projectApiService.GetAllAsync(token);
-            ViewData["Projects"] = new SelectList(projects, "Id", "Name");
-
-            var employees = await _employeeApiService.GetAllAsync(token);
-            ViewData["Employees"] = new SelectList(employees, "Id", "FullName");
+            ViewData["Projects"] = new SelectList(await _context.Projects.ToListAsync(), "Id", "Name");
+            ViewData["Employees"] = new SelectList(await _context.Employees.ToListAsync(), "Id", "FullName");
         }
 
         public async Task<IActionResult> Index()
         {
-            var token = GetToken();
-
-            var tasks = await _taskApiService.GetAllAsync(token);
-            var projects = await _projectApiService.GetAllAsync(token);
-            var employees = await _employeeApiService.GetAllAsync(token);
-
-            var projectDict = projects.ToDictionary(p => p.Id);
-            var employeeDict = employees.ToDictionary(e => e.Id);
-
-            foreach (var task in tasks)
-            {
-                if (projectDict.TryGetValue(task.ProjectId, out var project))
-                    task.Project = project;
-
-                if (task.EmployeeId.HasValue && employeeDict.TryGetValue(task.EmployeeId.Value, out var employee))
-                    task.Employee = employee;
-            }
+            var tasks = await _context.Tasks
+                .FromSqlRaw("EXEC GetAllTasks")
+                .Include(t => t.Project)
+                .Include(t => t.Employee)
+                .ToListAsync();
 
             return View(tasks);
         }
 
-
-
         public async Task<IActionResult> Details(int id)
         {
-            var token = GetToken();
-            var task = await _taskApiService.GetByIdAsync(id, token);
-            if (task == null)
-                return NotFound();
+            var task = await _context.Tasks
+                .FromSqlRaw("EXEC GetTaskById @p0", id)
+                .Include(t => t.Project)
+                .Include(t => t.Employee)
+                .FirstOrDefaultAsync();
 
-            task.Project = await _projectApiService.GetByIdAsync(task.ProjectId, token);
-
-            if (task.EmployeeId.HasValue)
-                task.Employee = await _employeeApiService.GetByIdAsync(task.EmployeeId.Value, token);
+            if (task == null) return NotFound();
 
             return View(task);
         }
 
-
         public async Task<IActionResult> Create()
         {
-            await PopulateDropdowns();
+            await PopulateDropdownsAsync();
             return View();
         }
 
@@ -90,40 +61,76 @@ namespace ERMS.Controllers
         {
             if (ModelState.IsValid)
             {
-                await _taskApiService.CreateAsync(task, GetToken());
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC CreateTask @p0, @p1, @p2, @p3, @p4, @p5, @p6",
+                    parameters: [
+                        task.Title,
+                        task.Description,
+                        task.Status,
+                        task.Priority,
+                        task.DueDate,
+                        task.ProjectId,
+                        task.EmployeeId
+                    ]);
+
                 return RedirectToAction(nameof(Index));
             }
-            await PopulateDropdowns();
+
+            await PopulateDropdownsAsync();
             return View(task);
         }
 
         public async Task<IActionResult> Edit(int id)
         {
-            var task = await _taskApiService.GetByIdAsync(id, GetToken());
-            if (task == null)
-                return NotFound();
+            var task = await _context.Tasks
+                .FromSqlRaw("EXEC GetTaskById @p0", id)
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
 
-            await PopulateDropdowns();
+            if (task == null) return NotFound();
+
+            await PopulateDropdownsAsync();
             return View(task);
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, WorkTask task)
         {
+            if (id != task.Id) return NotFound();
+
             if (ModelState.IsValid)
             {
-                await _taskApiService.CreateAsync(task, GetToken());
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC UpdateTask @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7",
+                    parameters: [
+                        task.Id,
+                        task.Title,
+                        task.Description,
+                        task.Status,
+                        task.Priority,
+                        task.DueDate,
+                        task.ProjectId,
+                        task.EmployeeId
+                    ]);
+
                 return RedirectToAction(nameof(Index));
             }
-            await PopulateDropdowns();
+
+            await PopulateDropdownsAsync();
             return View(task);
         }
 
-
-
         public async Task<IActionResult> Delete(int id)
         {
-            var task = await _taskApiService.GetByIdAsync(id, GetToken());
+            var task = await _context.Tasks
+                .FromSqlRaw("EXEC GetTaskById @p0", id)
+                .Include(t => t.Project)
+                .Include(t => t.Employee)
+                .FirstOrDefaultAsync();
+
+            if (task == null) return NotFound();
+
             return View(task);
         }
 
@@ -131,7 +138,7 @@ namespace ERMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            await _taskApiService.DeleteAsync(id, GetToken());
+            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteTask @p0", id);
             return RedirectToAction(nameof(Index));
         }
     }

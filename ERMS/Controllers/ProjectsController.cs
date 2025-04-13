@@ -1,41 +1,43 @@
-﻿using ERMS.Models;
+﻿using ERMS.Data;
+using ERMS.Models;
 using ERMS.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace ERMS.Controllers
 {
+    [Authorize(Roles = "Admin,Manager")]
     public class ProjectsController : Controller
     {
-        private readonly ProjectApiService _apiService;
+        private readonly ApplicationDbContext _context;
 
-        public ProjectsController(ProjectApiService apiService)
+        public ProjectsController(ApplicationDbContext context)
         {
-            _apiService = apiService;
+            _context = context;
         }
-
-        private string GetToken()
-        {
-            // In production, retrieve from session or secure store
-            return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW4iLCJleHAiOjE3NDM4NzE5Mjd9.DHS5Fs5dCk4jTy8f_exO0Q0vnUjQSI7tiod3_ZOVT0g"; // Replace with actual token
-        }
-
 
         public async Task<IActionResult> Index()
         {
-            var projects = await _apiService.GetAllAsync(GetToken());
+            var projects = await _context.Projects
+                .FromSqlRaw("EXEC GetAllProjects")
+                .ToListAsync();
             return View(projects);
         }
 
         public async Task<IActionResult> Details(int id)
         {
-            var project = await _apiService.GetByIdAsync(id, GetToken());
+            var param = new SqlParameter("@Id", id);
+            var project = await _context.Projects
+                .FromSqlRaw("EXEC GetProjectById @Id", param)
+                .FirstOrDefaultAsync();
+
+            if (project == null) return NotFound();
             return View(project);
         }
 
-        public IActionResult Create()
-        {
-            return View();
-        }
+        public IActionResult Create() => View();
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -43,7 +45,14 @@ namespace ERMS.Controllers
         {
             if (ModelState.IsValid)
             {
-                await _apiService.CreateAsync(project, GetToken());
+                var parameters = new[]
+                {
+                    new SqlParameter("@Name", project.Name ?? ""),
+                    new SqlParameter("@StartDate", project.StartDate),
+                    new SqlParameter("@EndDate", (object?)project.EndDate ?? DBNull.Value)
+                };
+
+                await _context.Database.ExecuteSqlRawAsync("EXEC CreateProject @Name, @StartDate, @EndDate", parameters);
                 return RedirectToAction(nameof(Index));
             }
             return View(project);
@@ -51,7 +60,12 @@ namespace ERMS.Controllers
 
         public async Task<IActionResult> Edit(int id)
         {
-            var project = await _apiService.GetByIdAsync(id, GetToken());
+            var param = new SqlParameter("@Id", id);
+            var project = await _context.Projects
+                .FromSqlRaw("EXEC GetProjectById @Id", param)
+                .FirstOrDefaultAsync();
+
+            if (project == null) return NotFound();
             return View(project);
         }
 
@@ -63,7 +77,15 @@ namespace ERMS.Controllers
 
             if (ModelState.IsValid)
             {
-                await _apiService.UpdateAsync(project, GetToken());
+                var parameters = new[]
+                {
+                    new SqlParameter("@Id", id),
+                    new SqlParameter("@Name", project.Name ?? ""),
+                    new SqlParameter("@StartDate", project.StartDate),
+                    new SqlParameter("@EndDate", (object?)project.EndDate ?? DBNull.Value)
+                };
+
+                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateProject @Id, @Name, @StartDate, @EndDate", parameters);
                 return RedirectToAction(nameof(Index));
             }
             return View(project);
@@ -71,7 +93,11 @@ namespace ERMS.Controllers
 
         public async Task<IActionResult> Delete(int id)
         {
-            var project = await _apiService.GetByIdAsync(id, GetToken());
+            var param = new SqlParameter("@Id", id);
+            var project = await _context.Projects
+                .FromSqlRaw("EXEC GetProjectById @Id", param)
+                .FirstOrDefaultAsync();
+
             return View(project);
         }
 
@@ -79,7 +105,8 @@ namespace ERMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            await _apiService.DeleteAsync(id, GetToken());
+            var param = new SqlParameter("@Id", id);
+            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteProject @Id", param);
             return RedirectToAction(nameof(Index));
         }
     }
