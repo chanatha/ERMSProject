@@ -17,7 +17,7 @@ namespace ERMS.Controllers
         {
             _context = context;
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Index()
         {
             var projects = await _context.Projects
@@ -25,7 +25,7 @@ namespace ERMS.Controllers
                 .ToListAsync();
             return View(projects);
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Details(int id)
         {
             var param = new SqlParameter("@Id", id);

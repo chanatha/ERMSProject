@@ -24,7 +24,7 @@ namespace ERMS.Controllers
             ViewData["Projects"] = new SelectList(await _context.Projects.ToListAsync(), "Id", "Name");
             ViewData["Employees"] = new SelectList(await _context.Employees.ToListAsync(), "Id", "FullName");
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Index()
         {
             var tasks = await _context.Tasks
@@ -35,7 +35,7 @@ namespace ERMS.Controllers
 
             return View(tasks);
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Details(int id)
         {
             var task = await _context.Tasks

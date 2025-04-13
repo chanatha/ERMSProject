@@ -16,7 +16,7 @@ namespace ERMS.Controllers
         {
             _context = context;
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Index()
         {
             var employees = await _context.Employees
@@ -24,7 +24,7 @@ namespace ERMS.Controllers
                 .ToListAsync();
             return View(employees);
         }
-
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null) return NotFound();
