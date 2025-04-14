@@ -7,7 +7,6 @@ using System.Text;
 
 namespace ERMS.API.Controllers
 {
-    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
