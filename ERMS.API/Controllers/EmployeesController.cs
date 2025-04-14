@@ -6,8 +6,8 @@ using System.Collections.Generic;
 
 namespace ERMS.API.Controllers
 {
- 
-    
+
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class EmployeesController : ControllerBase

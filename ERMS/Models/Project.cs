@@ -20,7 +20,7 @@ namespace ERMS.Models
 
         [DataType(DataType.Date)]
         [Display(Name = "End Date")]
-        public DateTime EndDate { get; set; } = DateTime.Today.AddMonths(1);
+        public DateTime? EndDate { get; set; } = DateTime.Today.AddMonths(1);
 
 
     }

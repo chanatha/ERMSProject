@@ -69,6 +69,14 @@ namespace ERMS.Data
 
         public async Task<int> DeleteProjectAsync(int id)
             => await Database.ExecuteSqlRawAsync("EXEC DeleteProject @Id = {0}", id);
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<WorkTask>().ToTable("Tasks");
+        }
+
     }
 
 }

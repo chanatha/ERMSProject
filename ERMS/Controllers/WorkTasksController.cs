@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ERMS.Controllers
 {
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = "Admin,Manager")] // Default role restriction
     public class WorkTasksController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -24,27 +24,38 @@ namespace ERMS.Controllers
             ViewData["Projects"] = new SelectList(await _context.Projects.ToListAsync(), "Id", "Name");
             ViewData["Employees"] = new SelectList(await _context.Employees.ToListAsync(), "Id", "FullName");
         }
+
         [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Index()
         {
-            var tasks = await _context.Tasks
-                .FromSqlRaw("EXEC GetAllTasks")
-                .Include(t => t.Project)
-                .Include(t => t.Employee)
-                .ToListAsync();
+            var tasks = _context.Tasks
+                .FromSqlRaw("EXEC GetAllWorkTasks")
+                .AsNoTracking()
+                .ToList() // Forces in-memory composition
+                .Select(t =>
+                {
+                    t.Project = _context.Projects.Find(t.ProjectId);
+                    t.Employee = t.EmployeeId.HasValue ? _context.Employees.Find(t.EmployeeId.Value) : null;
+                    return t;
+                })
+                .ToList();
 
             return View(tasks);
         }
+
         [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Details(int id)
         {
-            var task = await _context.Tasks
-                .FromSqlRaw("EXEC GetTaskById @p0", id)
-                .Include(t => t.Project)
-                .Include(t => t.Employee)
-                .FirstOrDefaultAsync();
+            var taskList = await _context.Tasks
+                .FromSqlRaw("EXEC GetWorkTaskById @p0", id)
+                .AsNoTracking()
+                .ToListAsync();
 
+            var task = taskList.FirstOrDefault();
             if (task == null) return NotFound();
+
+            task.Project = await _context.Projects.FindAsync(task.ProjectId);
+            task.Employee = task.EmployeeId.HasValue ? await _context.Employees.FindAsync(task.EmployeeId.Value) : null;
 
             return View(task);
         }
@@ -62,16 +73,15 @@ namespace ERMS.Controllers
             if (ModelState.IsValid)
             {
                 await _context.Database.ExecuteSqlRawAsync(
-                    "EXEC CreateTask @p0, @p1, @p2, @p3, @p4, @p5, @p6",
-                    parameters: [
-                        task.Title,
-                        task.Description,
-                        task.Status,
-                        task.Priority,
-                        task.DueDate,
-                        task.ProjectId,
-                        task.EmployeeId
-                    ]);
+                    "EXEC InsertWorkTask @p0, @p1, @p2, @p3, @p4, @p5, @p6",
+                    task.Title,
+                    task.Description ?? string.Empty,
+                    task.Status,
+                    task.Priority,
+                    task.DueDate,
+                    task.ProjectId,
+                    task.EmployeeId
+                );
 
                 return RedirectToAction(nameof(Index));
             }
@@ -82,11 +92,12 @@ namespace ERMS.Controllers
 
         public async Task<IActionResult> Edit(int id)
         {
-            var task = await _context.Tasks
-                .FromSqlRaw("EXEC GetTaskById @p0", id)
+            var taskList = await _context.Tasks
+                .FromSqlRaw("EXEC GetWorkTaskById @p0", id)
                 .AsNoTracking()
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
+            var task = taskList.FirstOrDefault();
             if (task == null) return NotFound();
 
             await PopulateDropdownsAsync();
@@ -102,17 +113,16 @@ namespace ERMS.Controllers
             if (ModelState.IsValid)
             {
                 await _context.Database.ExecuteSqlRawAsync(
-                    "EXEC UpdateTask @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7",
-                    parameters: [
-                        task.Id,
-                        task.Title,
-                        task.Description,
-                        task.Status,
-                        task.Priority,
-                        task.DueDate,
-                        task.ProjectId,
-                        task.EmployeeId
-                    ]);
+                    "EXEC UpdateWorkTask @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7",
+                    task.Id,
+                    task.Title,
+                    task.Description ?? string.Empty,
+                    task.Status,
+                    task.Priority,
+                    task.DueDate,
+                    task.ProjectId,
+                    task.EmployeeId
+                );
 
                 return RedirectToAction(nameof(Index));
             }
@@ -123,13 +133,16 @@ namespace ERMS.Controllers
 
         public async Task<IActionResult> Delete(int id)
         {
-            var task = await _context.Tasks
-                .FromSqlRaw("EXEC GetTaskById @p0", id)
-                .Include(t => t.Project)
-                .Include(t => t.Employee)
-                .FirstOrDefaultAsync();
+            var taskList = await _context.Tasks
+                .FromSqlRaw("EXEC GetWorkTaskById @p0", id)
+                .AsNoTracking()
+                .ToListAsync();
 
+            var task = taskList.FirstOrDefault();
             if (task == null) return NotFound();
+
+            task.Project = await _context.Projects.FindAsync(task.ProjectId);
+            task.Employee = task.EmployeeId.HasValue ? await _context.Employees.FindAsync(task.EmployeeId.Value) : null;
 
             return View(task);
         }
@@ -138,7 +151,7 @@ namespace ERMS.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteTask @p0", id);
+            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteWorkTask @p0", id);
             return RedirectToAction(nameof(Index));
         }
     }

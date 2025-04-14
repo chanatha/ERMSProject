@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace ERMS.Controllers
 {
@@ -29,9 +30,10 @@ namespace ERMS.Controllers
         public async Task<IActionResult> Details(int id)
         {
             var param = new SqlParameter("@Id", id);
-            var project = await _context.Projects
+            var project = _context.Projects
                 .FromSqlRaw("EXEC GetProjectById @Id", param)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             if (project == null) return NotFound();
             return View(project);
@@ -47,12 +49,13 @@ namespace ERMS.Controllers
             {
                 var parameters = new[]
                 {
-                    new SqlParameter("@Name", project.Name ?? ""),
-                    new SqlParameter("@StartDate", project.StartDate),
-                    new SqlParameter("@EndDate", (object?)project.EndDate ?? DBNull.Value)
+                    new SqlParameter("@Name", SqlDbType.NVarChar, 100) { Value = project.Name ?? (object)DBNull.Value },
+                    new SqlParameter("@Description", SqlDbType.NVarChar) { Value = project.Description ?? (object)DBNull.Value },
+                    new SqlParameter("@StartDate", SqlDbType.Date) { Value = project.StartDate },
+                    new SqlParameter("@EndDate", SqlDbType.Date) { Value = project.EndDate.HasValue ? (object)project.EndDate.Value : DBNull.Value }
                 };
 
-                await _context.Database.ExecuteSqlRawAsync("EXEC CreateProject @Name, @StartDate, @EndDate", parameters);
+                await _context.Database.ExecuteSqlRawAsync("EXEC InsertProject @Name, @Description, @StartDate, @EndDate", parameters);
                 return RedirectToAction(nameof(Index));
             }
             return View(project);
@@ -61,9 +64,10 @@ namespace ERMS.Controllers
         public async Task<IActionResult> Edit(int id)
         {
             var param = new SqlParameter("@Id", id);
-            var project = await _context.Projects
+            var project =  _context.Projects
                 .FromSqlRaw("EXEC GetProjectById @Id", param)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             if (project == null) return NotFound();
             return View(project);
@@ -79,13 +83,13 @@ namespace ERMS.Controllers
             {
                 var parameters = new[]
                 {
-                    new SqlParameter("@Id", id),
-                    new SqlParameter("@Name", project.Name ?? ""),
-                    new SqlParameter("@StartDate", project.StartDate),
-                    new SqlParameter("@EndDate", (object?)project.EndDate ?? DBNull.Value)
+                    new SqlParameter("@Name", SqlDbType.NVarChar, 100) { Value = project.Name ?? (object)DBNull.Value },
+                    new SqlParameter("@Description", SqlDbType.NVarChar) { Value = project.Description ?? (object)DBNull.Value },
+                    new SqlParameter("@StartDate", SqlDbType.Date) { Value = project.StartDate },
+                    new SqlParameter("@EndDate", SqlDbType.Date) { Value = project.EndDate.HasValue ? (object)project.EndDate.Value : DBNull.Value }
                 };
 
-                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateProject @Id, @Name, @StartDate, @EndDate", parameters);
+                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateProject @Id, @Name, @Description, @StartDate, @EndDate", parameters);
                 return RedirectToAction(nameof(Index));
             }
             return View(project);
@@ -94,9 +98,10 @@ namespace ERMS.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var param = new SqlParameter("@Id", id);
-            var project = await _context.Projects
+            var project = _context.Projects
                 .FromSqlRaw("EXEC GetProjectById @Id", param)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             return View(project);
         }

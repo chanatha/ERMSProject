@@ -29,13 +29,16 @@ namespace ERMS.Controllers
         {
             if (id == null) return NotFound();
 
-            var employee = await _context.Employees
+            var employee = _context.Employees
                 .FromSqlRaw("EXEC GetEmployeeById @p0", id)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             if (employee == null) return NotFound();
             return View(employee);
         }
+
+
 
         public IActionResult Create() => View();
 
@@ -45,8 +48,10 @@ namespace ERMS.Controllers
         {
             if (ModelState.IsValid)
             {
-                await _context.Database.ExecuteSqlRawAsync("EXEC CreateEmployee @p0, @p1, @p2, @p3",
-                    employee.FirstName, employee.LastName, employee.Position, employee.HireDate);
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC InsertEmployee @p0, @p1, @p2, @p3, @p4, @p5",
+                    employee.FirstName, employee.LastName,employee.Email,
+                    employee.Department, employee.Position, employee.HireDate);
 
                 return RedirectToAction(nameof(Index));
             }
@@ -57,9 +62,10 @@ namespace ERMS.Controllers
         {
             if (id == null) return NotFound();
 
-            var employee = await _context.Employees
+            var employee = _context.Employees
                 .FromSqlRaw("EXEC GetEmployeeById @p0", id)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             if (employee == null) return NotFound();
             return View(employee);
@@ -73,8 +79,9 @@ namespace ERMS.Controllers
 
             if (ModelState.IsValid)
             {
-                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateEmployee @p0, @p1, @p2, @p3, @p4",
-                    employee.Id, employee.FirstName, employee.LastName, employee.Position, employee.HireDate);
+                await _context.Database.ExecuteSqlRawAsync("EXEC UpdateEmployee @p0, @p1, @p2, @p3, @p4, @p5",
+                    employee.Id, employee.FirstName, employee.LastName,employee.Email,
+                    employee.Position, employee.HireDate);
 
                 return RedirectToAction(nameof(Index));
             }
@@ -85,9 +92,10 @@ namespace ERMS.Controllers
         {
             if (id == null) return NotFound();
 
-            var employee = await _context.Employees
+            var employee = _context.Employees
                 .FromSqlRaw("EXEC GetEmployeeById @p0", id)
-                .FirstOrDefaultAsync();
+                .AsEnumerable()
+                .FirstOrDefault();
 
             return View(employee);
         }
