@@ -1,11 +1,13 @@
 ﻿// File: Controllers/ProjectsController.cs
 using ERMS.API.Interfaces;
 using ERMS.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 
 namespace ERMS.API.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class ProjectsController : ControllerBase

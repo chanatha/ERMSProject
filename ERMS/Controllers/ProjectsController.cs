@@ -1,9 +1,11 @@
 ﻿using ERMS.Models;
 using ERMS.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ERMS.Controllers
 {
+    [Authorize(Roles = "Admin,Manager")]
     public class ProjectsController : Controller
     {
         private readonly ProjectApiService _apiService;
